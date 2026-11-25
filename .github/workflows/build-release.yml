@@ -22,7 +22,7 @@ jobs:
             /r:"$wpf\WindowsBase.dll" /r:"$fx\System.Xaml.dll" /r:"$fx\System.Windows.Forms.dll" `
             "LayoutKeeper\src\Core.cs" "墨守\Rough.cs" "墨守\MoShou.cs"
           & "$fx\csc.exe" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
-            /win32icon:"墨守\MoShou.ico" /resource:"墨守.exe",MoShou.exe /out:"墨守-Windows-Setup.exe" `
+            "/win32icon:墨守\MoShou.ico" "/resource:墨守.exe,MoShou.exe" "/out:墨守-Windows-Setup.exe" `
             /r:"$wpf\PresentationFramework.dll" /r:"$wpf\PresentationCore.dll" `
             /r:"$wpf\WindowsBase.dll" /r:"$fx\System.Xaml.dll" /r:"$fx\System.Windows.Forms.dll" `
             "墨守\Installer.cs"
