@@ -23,6 +23,9 @@ html[data-theme="dark"]{
 }
 html,body{width:100%;height:100%;overflow:hidden;background:#0e0e0b;display:grid;place-items:center;font-family:var(--sans)}
 html:not([data-theme="dark"]) body{background:#E6E0D2}
+/* 原生 macOS 独立应用窗口模式：去外框背景，宣纸圆角卡片铺满整个无边框窗口 */
+html.native-app,html.native-app body{background:transparent!important}
+html.native-app .shell{width:100vw;height:100vh;max-width:none;border-radius:22px;box-shadow:none}
 
 /* 主卡片：严格保持 462:486 水墨比例，响应式无死边 */
 .shell{
@@ -60,12 +63,14 @@ html:not([data-theme="dark"]) body{background:#E6E0D2}
 .review-dot .core{width:4px;height:4px;border-radius:50%;background:var(--verm)}
 .head-right{display:flex;align-items:center;gap:18px}
 .meta{text-align:right;font-family:var(--mono);font-size:clamp(10px,1.25vw,12px);line-height:1.42;color:var(--fg3)}
-.glyph-close{
-  width:34px;height:34px;display:grid;place-items:center;cursor:pointer;opacity:.52;
-  color:var(--verm);font-size:17px;transition:opacity .18s ease,transform .12s ease;
+.glyph-close,.glyph-min{
+  width:32px;height:32px;display:grid;place-items:center;cursor:pointer;opacity:.52;
+  font-size:17px;transition:opacity .18s ease,transform .12s ease;
 }
-.glyph-close:hover{opacity:1}
-.glyph-close:active{transform:scale(.86)}
+.glyph-min{color:var(--fg2);font-size:15px}
+.glyph-close{color:var(--verm)}
+.glyph-close:hover,.glyph-min:hover{opacity:1}
+.glyph-close:active,.glyph-min:active{transform:scale(.86)}
 
 /* 棋盘画心 */
 .board-wrap{
@@ -198,6 +203,7 @@ html:not([data-theme="dark"]) body{background:#E6E0D2}
         <div id="tScale">macOS</div>
         <div id="tCount">0 项</div>
       </div>
+      <div class="glyph-min" id="btnMin" title="最小化" style="display:none">—</div>
       <div class="glyph-close" id="btnClose" title="关闭并退出 (Esc)">✕</div>
     </div>
   </div>
@@ -1272,6 +1278,9 @@ async function toggleTheme(){
 }
 
 /* ---------- 初始化 ---------- */
+const nativeHost = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.moshouHost) || null;
+if (nativeHost) document.documentElement.classList.add("native-app");
+
 async function init(){
   buildLegend();
   attachInkBtn(document.getElementById("btnSave"), onPrimary);
@@ -1281,7 +1290,21 @@ async function init(){
   document.getElementById("lnkDir").onclick = openDirDrawer;
   document.getElementById("lnkTheme").onclick = toggleTheme;
   document.getElementById("reviewDot").onclick = openGuide;
-  document.getElementById("btnClose").onclick = async () => { await api("/api/quit", {}); window.close(); };
+  if (nativeHost){
+    const btnMin = document.getElementById("btnMin");
+    btnMin.style.display = "grid";
+    btnMin.onclick = () => nativeHost.postMessage("minimize");
+    document.getElementById("btnClose").onclick = () => nativeHost.postMessage("close");
+    document.getElementById("headerEl").ondblclick = () => nativeHost.postMessage("toggleSize");
+    // 原生无边框窗口：空白宣纸与顶栏均可顺手拖动窗口
+    shellEl.addEventListener("mousedown", e => {
+      if (e.button !== 0) return;
+      if (e.target.closest("button,.ink-btn,.preset-chip,.link-cell,.glyph-close,.glyph-min,.review-dot,.leg-chip,.drawer,.dir-act,#boardCanvas,#calCanvas")) return;
+      nativeHost.postMessage("drag");
+    });
+  } else {
+    document.getElementById("btnClose").onclick = async () => { await api("/api/quit", {}); window.close(); };
+  }
 
   window.addEventListener("keydown", e => {
     const mod = e.metaKey || e.ctrlKey;
