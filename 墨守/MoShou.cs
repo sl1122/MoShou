@@ -804,8 +804,8 @@ namespace MoShou
             MinWidth = WIN_W;
             MinHeight = WIN_H;
             WindowStyle = WindowStyle.None;
-            // 启用 CanResize 以支持原生 Win32 SC_SIZE + WM_SIZING VSync 原子等比缩放（AllowsTransparency 下无任何系统边框）
-            ResizeMode = ResizeMode.CanResize;
+            // 静态保持 NoResize 彻底杜绝 Win11 DWM 在透明圆角外绘制黑色三角底图；拖拽缩放瞬间临时开启 WS_THICKFRAME 走原生 SC_SIZE+WM_SIZING 原子缩放
+            ResizeMode = ResizeMode.NoResize;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -944,6 +944,19 @@ namespace MoShou
         static extern bool GetCursorPos(out WinPoint pt);
 
         [DllImport("user32.dll")]
+        static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [DllImport("user32.dll")]
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        const int WS_THICKFRAME = 0x00040000;
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_NOACTIVATE = 0x0010;
+        const uint SWP_FRAMECHANGED = 0x0020;
+
+        [DllImport("user32.dll")]
         static extern bool ReleaseCapture();
 
         [StructLayout(LayoutKind.Sequential)]
@@ -1032,6 +1045,14 @@ namespace MoShou
             }
             else if (msg == WM_EXITSIZEMOVE)
             {
+                // 缩放结束立即移除临时 WS_THICKFRAME，确保四个圆角外部永远完全透明无黑角
+                int st = GetWindowLong(hwnd, GWL_STYLE);
+                if ((st & WS_THICKFRAME) != 0)
+                {
+                    SetWindowLong(hwnd, GWL_STYLE, st & ~WS_THICKFRAME);
+                    SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                }
                 savedWinW = ActualWidth;
                 SaveSettings();
             }
@@ -1415,6 +1436,8 @@ namespace MoShou
             shell.BorderThickness = new Thickness(1);
             shell.Margin = new Thickness(0);
             shell.ClipToBounds = true;
+            // 显式按圆角 22 裁切 shell 内部 Halo/PaperGrain，杜绝四角溢色
+            shell.Clip = new RectangleGeometry(new Rect(0, 0, WIN_W, WIN_H), 22, 22);
             shell.RenderTransformOrigin = new Point(0.5, 0.5);
             winScale = new ScaleTransform(1, 1);
             shell.RenderTransform = winScale;
@@ -1555,8 +1578,19 @@ namespace MoShou
                 IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
+                    int st = GetWindowLong(hwnd, GWL_STYLE);
+                    if ((st & WS_THICKFRAME) == 0)
+                        SetWindowLong(hwnd, GWL_STYLE, st | WS_THICKFRAME);
                     ReleaseCapture();
                     SendMessage(hwnd, WM_SYSCOMMAND, (IntPtr)(SC_SIZE + wmsz), IntPtr.Zero);
+                    // 兜底：若用户仅轻点未拖动（未触发 WM_EXITSIZEMOVE），也立即还原无边框态
+                    int st2 = GetWindowLong(hwnd, GWL_STYLE);
+                    if ((st2 & WS_THICKFRAME) != 0)
+                    {
+                        SetWindowLong(hwnd, GWL_STYLE, st2 & ~WS_THICKFRAME);
+                        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                    }
                 }
             };
             return b;
