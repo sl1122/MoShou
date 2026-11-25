@@ -1,0 +1,65 @@
+name: Build MoShou (Windows EXE + macOS DMG)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile MoShou.exe & Setup Installer
+        shell: pwsh
+        run: |
+          $fx = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
+          $wpf = Join-Path $fx "WPF"
+          & "$fx\csc.exe" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
+            /win32icon:"墨守\MoShou.ico" /out:"墨守.exe" `
+            /r:"$wpf\PresentationFramework.dll" /r:"$wpf\PresentationCore.dll" `
+            /r:"$wpf\WindowsBase.dll" /r:"$fx\System.Xaml.dll" /r:"$fx\System.Windows.Forms.dll" `
+            "LayoutKeeper\src\Core.cs" "墨守\Rough.cs" "墨守\MoShou.cs"
+          & "$fx\csc.exe" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
+            /win32icon:"墨守\MoShou.ico" /resource:"墨守.exe",MoShou.exe /out:"墨守-Windows-Setup.exe" `
+            /r:"$wpf\PresentationFramework.dll" /r:"$wpf\PresentationCore.dll" `
+            /r:"$wpf\WindowsBase.dll" /r:"$fx\System.Xaml.dll" /r:"$fx\System.Windows.Forms.dll" `
+            "墨守\Installer.cs"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoShou-Windows-EXE
+          path: |
+            墨守.exe
+            墨守-Windows-Setup.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build MoShou-macOS.dmg
+        run: |
+          chmod +x "墨守-macOS/make_dmg.sh"
+          ./墨守-macOS/make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoShou-macOS-DMG
+          path: 墨守-macOS/墨守-macOS.dmg
+
+  bundle-cross-platform:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Combine Windows EXE & macOS DMG into one release bundle
+        run: |
+          mkdir -p MoShou-CrossPlatform
+          cp dist/MoShou-Windows-EXE/* MoShou-CrossPlatform/
+          cp dist/MoShou-macOS-DMG/* MoShou-CrossPlatform/
+          ls -lh MoShou-CrossPlatform
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoShou-CrossPlatform-EXE-and-DMG
+          path: MoShou-CrossPlatform/

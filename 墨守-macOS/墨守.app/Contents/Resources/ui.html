@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>墨守 · macOS</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none}
+:root{
+  --bg:#F4F0E6;--card:#ECE6D8;--board:#EFE9DC;--fg:#17160F;--fg2:#4B493F;--fg3:#8A8577;
+  --hair:rgba(23,22,15,.14);--verm:#A93E30;
+  --pbtn-bg:#17160F;--pbtn-fg:#F4F0E6;--pbtn-bd:#17160F;--pbtn-hov:#232118;
+  --app:#274C8C;--dir:#4E7A5C;--arc:#764D7C;--doc:#8A5B33;--sys:#C6BCA6;--other:#B8862F;
+  --serif:"Songti SC","STSong","Noto Serif SC","SimSun",serif;
+  --sans:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+  --mono:"SF Mono","Menlo","Consolas",monospace;
+}
+html[data-theme="dark"]{
+  --bg:#13130E;--card:#1A1A14;--board:#171711;--fg:#EFEADC;--fg2:#B8B2A2;--fg3:#7E796C;
+  --hair:rgba(239,234,220,.16);--verm:#C9573F;
+  --pbtn-bg:#E5DFD0;--pbtn-fg:#13130E;--pbtn-bd:#C8BEAA;--pbtn-hov:#EFEADC;
+  --app:#3E6FC4;--dir:#6BA077;--arc:#A878B0;--doc:#B57A45;--sys:#D6CCB8;--other:#D6A23C;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#0e0e0b;display:grid;place-items:center;font-family:var(--sans)}
+html:not([data-theme="dark"]) body{background:#E6E0D2}
+
+/* 主卡片：严格保持 462:486 水墨比例，响应式无死边 */
+.shell{
+  position:relative;
+  width:min(94vw, calc(94vh * 462 / 486), 740px);
+  aspect-ratio:462 / 486;
+  background:var(--bg);
+  border:1px solid var(--hair);
+  border-radius:26px;
+  overflow:hidden;
+  box-shadow:0 24px 64px rgba(0,0,0,.18);
+  display:flex;flex-direction:column;
+  padding:3.2% 3.5% 2.6%;
+  color:var(--fg);
+  transition:background .35s ease,border-color .35s ease;
+}
+/* 极淡宣纸纤维纹（纯静态，零动画开销） */
+.shell::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.32;
+  background-image:radial-gradient(circle at 82% 8%, rgba(255,251,240,.22), transparent 48%),
+                   radial-gradient(circle at 12% 92%, rgba(0,0,0,.06), transparent 46%);
+}
+.layer{position:relative;z-index:2}
+
+/* 顶栏 */
+.header{display:flex;align-items:center;justify-content:space-between;height:11%;flex:none}
+.brand{display:flex;align-items:center;gap:14px}
+.title-v{font-family:var(--serif);font-size:clamp(18px,2.4vw,24px);line-height:1.08;letter-spacing:0;color:var(--fg);display:flex;flex-direction:column}
+.review-dot{
+  width:24px;height:24px;display:grid;place-items:center;cursor:pointer;opacity:.5;
+  transition:opacity .18s ease,transform .18s ease;position:relative;
+}
+.review-dot:hover{opacity:1;transform:scale(1.18)}
+.review-dot .ring{width:13px;height:13px;border-radius:50%;border:1.2px solid var(--fg2);display:grid;place-items:center}
+.review-dot .core{width:4px;height:4px;border-radius:50%;background:var(--verm)}
+.head-right{display:flex;align-items:center;gap:18px}
+.meta{text-align:right;font-family:var(--mono);font-size:clamp(10px,1.25vw,12px);line-height:1.42;color:var(--fg3)}
+.glyph-close{
+  width:34px;height:34px;display:grid;place-items:center;cursor:pointer;opacity:.52;
+  color:var(--verm);font-size:17px;transition:opacity .18s ease,transform .12s ease;
+}
+.glyph-close:hover{opacity:1}
+.glyph-close:active{transform:scale(.86)}
+
+/* 棋盘画心 */
+.board-wrap{
+  position:relative;flex:1;min-height:0;margin:1.6% 0;
+  background:var(--board);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);
+  border-radius:8px;overflow:hidden;
+}
+#boardCanvas{width:100%;height:100%;display:block;cursor:default}
+
+/* 棋盘内实时水墨浮卡 */
+.preview-card{
+  position:absolute;pointer-events:none;z-index:20;
+  background:var(--bg);border:1px solid var(--hair);border-radius:8px;
+  padding:6px 10px;opacity:0;transform:translateY(3px);
+  transition:opacity .12s ease,transform .12s ease;
+  box-shadow:0 6px 20px rgba(0,0,0,.10);max-width:240px;
+}
+.preview-card.show{opacity:.97;transform:translateY(0)}
+.pv-top{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--fg)}
+.pv-pip{width:7px;height:7px;border-radius:50%;flex:none}
+.pv-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-sub{font-family:var(--mono);font-size:10px;color:var(--fg3);margin-top:2px;padding-left:13px}
+
+/* 墨历与六色交互图例 */
+.cal-section{flex:none;height:19.5%;display:flex;flex-direction:column;justify-content:space-between;padding:1% 0}
+.preset-bar{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.preset-lbl{font-size:10px;color:var(--fg3)}
+.preset-chip{font-size:10px;color:var(--fg2);padding:2px 7px;border-radius:5px;border:1px solid var(--hair);background:color-mix(in srgb,var(--fg) 6%,transparent);cursor:pointer;transition:border-color .15s,color .15s}
+.preset-chip:hover{border-color:var(--verm);color:var(--verm)}
+.cal-top{display:flex;align-items:flex-end;justify-content:space-between;height:56%}
+#calCanvas{flex:1;height:100%;display:block;cursor:pointer}
+.cal-right{width:110px;text-align:right;padding-bottom:4px}
+.cal-date{font-family:var(--mono);font-size:clamp(14px,1.8vw,18px);color:var(--fg2)}
+.cal-meta{font-size:clamp(9.5px,1.2vw,11px);color:var(--fg3);margin-top:2px}
+.legend{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;height:30%}
+.leg-chip{display:flex;align-items:center;gap:5px;font-size:clamp(10px,1.25vw,12px);color:var(--fg3);cursor:pointer;padding:2px 4px;border-radius:4px;transition:color .16s}
+.leg-chip:hover{color:var(--fg)}
+.leg-dot{width:6.5px;height:6.5px;border-radius:50%;flex:none}
+.leg-cnt{font-family:var(--mono);font-size:10px;opacity:.72}
+
+/* 主按钮（52px 比例 + 平滑 hover + 有机墨晕 + 四角回纹生长） */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:none;height:12.5%;align-items:center}
+.ink-btn{
+  position:relative;height:86%;min-height:48px;border-radius:11px;
+  border:1px solid var(--hair);background:color-mix(in srgb, var(--card) 42%, transparent);
+  color:var(--fg);font-family:var(--serif);font-size:clamp(16px,2.1vw,21px);font-weight:500;
+  cursor:pointer;overflow:hidden;display:grid;place-items:center;
+  transition:transform .12s ease,background .18s ease,border-color .18s ease,color .18s ease;
+}
+.ink-btn.primary{background:var(--pbtn-bg);color:var(--pbtn-fg);border-color:var(--pbtn-bd)}
+.ink-btn.primary:hover{background:var(--pbtn-hov);border-color:var(--verm)}
+.ink-btn:not(.primary):hover{border-color:color-mix(in srgb, var(--verm) 55%, transparent);background:color-mix(in srgb, var(--fg) 8%, transparent)}
+.ink-btn:active{transform:scale(.97)}
+.ink-btn .lbl{position:relative;z-index:3;pointer-events:none}
+/* 同心流光内框：纤细顺边笔触，仅按下时自中点向四角流淌绘出、抬起淡出，绝不常驻 */
+.ink-btn .rim-svg{
+  position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);
+  pointer-events:none;z-index:2;opacity:0;transition:opacity .22s ease;
+}
+.ink-btn .rim-svg path{
+  fill:none;stroke:var(--verm);stroke-opacity:.48;stroke-width:1;stroke-linecap:round;
+  vector-effect:non-scaling-stroke;stroke-dasharray:130;stroke-dashoffset:130;
+  transition:stroke-dashoffset .32s cubic-bezier(.22,1,.36,1);
+}
+.ink-btn.primary .rim-svg path{stroke:var(--pbtn-fg);stroke-opacity:.46}
+.ink-btn.pressing .rim-svg{opacity:1}
+.ink-btn.pressing .rim-svg path{stroke-dashoffset:0}
+.rip-blob{position:absolute;pointer-events:none;z-index:1;border-radius:46% 54% 49% 51%/52% 47% 53% 48%;transform:translate(-50%,-50%) scale(.12)}
+
+/* 底栏 */
+.status-bar{display:flex;align-items:center;justify-content:space-between;flex:none;height:6.2%;padding-top:4px;font-size:clamp(10px,1.25vw,12px);color:var(--fg3)}
+.status-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58%}
+.links{display:flex;align-items:center;gap:14px}
+.link-cell{display:flex;align-items:center;gap:5px;cursor:pointer;transition:color .16s ease,transform .1s ease}
+.link-cell .pip{width:4px;height:4px;border-radius:50%;background:var(--verm);opacity:.6;transition:transform .16s ease,opacity .16s ease}
+.link-cell:hover{color:var(--verm)}
+.link-cell:hover .pip{transform:scale(1.45);opacity:1}
+.link-cell:active{transform:scale(.94)}
+
+/* 底部抽屉（历史回溯 / 目录存址 / 使用指引）：不透明、不遮挡上方棋盘 */
+.drawer{
+  position:absolute;left:3%;right:3%;bottom:2.2%;height:39%;z-index:40;
+  background:var(--card);border:1px solid var(--hair);border-radius:16px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:8px;
+  opacity:0;pointer-events:none;transform:translateY(10px);
+  transition:opacity .2s ease,transform .22s cubic-bezier(.22,1,.36,1);
+  box-shadow:0 12px 32px rgba(0,0,0,.16);
+}
+.drawer.open{opacity:1;pointer-events:auto;transform:translateY(0)}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;font-family:var(--serif);font-size:14px;color:var(--fg)}
+.drawer-close{font-family:var(--sans);font-size:11.5px;color:var(--fg3);cursor:pointer}
+.drawer-close:hover{color:var(--verm)}
+.drawer-body{flex:1;overflow-y:auto;scrollbar-width:none;font-size:12px;color:var(--fg2)}
+.drawer-body::-webkit-scrollbar{display:none}
+.hist-row{padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:11.5px;cursor:pointer;transition:background .15s}
+.hist-row:hover{background:color-mix(in srgb, var(--fg) 8%, transparent)}
+.hist-row.sel{background:color-mix(in srgb, var(--verm) 16%, transparent);color:var(--verm)}
+.drawer-foot{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:none}
+.mini-btn{
+  height:34px;border-radius:8px;border:1px solid var(--hair);background:transparent;
+  color:var(--fg);font-family:var(--serif);font-size:13px;cursor:pointer;transition:border-color .16s;
+}
+.mini-btn.pri{background:var(--pbtn-bg);color:var(--pbtn-fg);border-color:var(--pbtn-bd)}
+.mini-btn:hover{border-color:var(--verm)}
+.dir-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--hair)}
+.dir-path{font-family:var(--mono);font-size:11px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72%}
+.dir-act{color:var(--verm);font-size:12px;cursor:pointer;margin-left:10px}
+.guide-item{display:grid;grid-template-columns:22px 64px 1fr;gap:4px;margin:5px 0;line-height:1.55;font-size:12px}
+.guide-num{font-family:var(--serif);color:var(--verm)}
+.guide-lbl{font-family:var(--serif);color:var(--fg);font-weight:500}
+
+/* 全窗动效遮罩层（开场动画 + 换材质 + 指引归位微光，零 BlurEffect） */
+#veilCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
+.intro-hide{opacity:0 !important}
+.fade-el{transition:opacity .35s cubic-bezier(.22,1,.36,1)}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+  <div class="header layer fade-el" id="headerEl">
+    <div class="brand">
+      <div class="title-v"><span>墨</span><span>守</span></div>
+      <div class="review-dot" id="reviewDot" title="使用指引与开场动画回顾">
+        <div class="ring"><div class="core"></div></div>
+      </div>
+    </div>
+    <div class="head-right">
+      <div class="meta">
+        <div id="tRes">1440 × 900</div>
+        <div id="tScale">macOS</div>
+        <div id="tCount">0 项</div>
+      </div>
+      <div class="glyph-close" id="btnClose" title="关闭并退出 (Esc)">✕</div>
+    </div>
+  </div>
+
+  <div class="board-wrap layer fade-el" id="boardWrap">
+    <canvas id="boardCanvas"></canvas>
+    <div class="preview-card" id="previewCard">
+      <div class="pv-top"><span class="pv-pip" id="pvPip"></span><span class="pv-name" id="pvName"></span></div>
+      <div class="pv-sub" id="pvSub"></div>
+    </div>
+  </div>
+
+  <div class="cal-section layer fade-el" id="calSection">
+    <div class="preset-bar">
+      <span class="preset-lbl" id="presetLbl">分区阵型</span>
+      <span class="preset-chip" onclick="applyZonePreset('work_zone')" title="内置语义分区：左翼系统/办公/通讯，右翼归档与影音游戏">效率分治</span>
+      <span class="preset-chip" onclick="applyZonePreset('quad_zone')" title="内置语义分区：左上系统办公、左下通讯、右上归档、右下影音游戏">四隅六区</span>
+      <span class="preset-chip" onclick="applyZonePreset('left_zone')" title="内置语义分区：按六大分区齐整排于左翼">左翼精排</span>
+    </div>
+    <div class="cal-top">
+      <canvas id="calCanvas" title="点击打开历史回溯"></canvas>
+      <div class="cal-right">
+        <div class="cal-date" id="tCalDate">--.--</div>
+        <div class="cal-meta" id="tCalMeta">近30日 · 0 次</div>
+      </div>
+    </div>
+    <div class="legend" id="legendRow"></div>
+  </div>
+
+  <div class="actions layer fade-el" id="actionBar">
+    <button class="ink-btn primary" id="btnSave">
+      <svg class="rim-svg" viewBox="0 0 200 46" preserveAspectRatio="none"><path d="M100,1 L191,1 Q199,1 199,9 L199,19"/><path d="M100,1 L9,1 Q1,1 1,9 L1,19"/><path d="M100,45 L191,45 Q199,45 199,37 L199,27"/><path d="M100,45 L9,45 Q1,45 1,37 L1,27"/></svg>
+      <span class="lbl" id="btnSaveLbl">落子成记</span>
+    </button>
+    <button class="ink-btn" id="btnRestore">
+      <svg class="rim-svg" viewBox="0 0 200 46" preserveAspectRatio="none"><path d="M100,1 L191,1 Q199,1 199,9 L199,19"/><path d="M100,1 L9,1 Q1,1 1,9 L1,19"/><path d="M100,45 L191,45 Q199,45 199,37 L199,27"/><path d="M100,45 L9,45 Q1,45 1,37 L1,27"/></svg>
+      <span class="lbl" id="btnRestoreLbl">归位</span>
+    </button>
+  </div>
+
+  <div class="status-bar layer fade-el" id="statusBar">
+    <div class="status-txt" id="tStatus">只动坐标 · 不动文件</div>
+    <div class="links">
+      <div class="link-cell" id="lnkHist"><span class="pip" id="pip0"></span><span>回溯</span></div>
+      <div class="link-cell" id="lnkDir"><span class="pip" id="pip1"></span><span>目录</span></div>
+      <div class="link-cell" id="lnkTheme"><span class="pip" id="pip2"></span><span id="lnkThemeTxt">夜墨</span></div>
+    </div>
+  </div>
+
+  <!-- 历史回溯抽屉 -->
+  <div class="drawer" id="histDrawer">
+    <div class="drawer-head"><span>历史回溯 · 点击节点实时预览棋局</span><span class="drawer-close" onclick="closeAllDrawers(true)">收起 (Esc)</span></div>
+    <div class="drawer-body" id="histList"></div>
+    <div class="drawer-foot">
+      <button class="mini-btn pri" onclick="applyRollback()">设为此刻记忆</button>
+      <button class="mini-btn" onclick="closeAllDrawers(true)">返回现状</button>
+    </div>
+  </div>
+
+  <!-- 目录与存址抽屉 -->
+  <div class="drawer" id="dirDrawer">
+    <div class="drawer-head"><span>目录与存址 · 兼容任意中英文路径</span><span class="drawer-close" onclick="closeAllDrawers(false)">收起 (Esc)</span></div>
+    <div class="drawer-body">
+      <div class="dir-row">
+        <div><div style="font-size:10px;color:var(--fg3)">快照与历史存址</div><div class="dir-path" id="dirRootTxt"></div></div>
+        <div><span class="dir-act" onclick="openDir('data')">打开</span><span class="dir-act" onclick="chooseDir()">更改存址</span></div>
+      </div>
+      <div class="dir-row">
+        <div><div style="font-size:10px;color:var(--fg3)">程序所在目录</div><div class="dir-path" id="dirExeTxt"></div></div>
+        <div><span class="dir-act" onclick="openDir('exe')">打开</span></div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--fg3)">⌘S 落笔 · ⌘R 归位 · ⌘Z 撤销一步 · 后台零轮询、仅操作时访问 Finder</div>
+    </div>
+    <div class="drawer-foot">
+      <button class="mini-btn" onclick="openDir('data')">在 Finder 中查看</button>
+      <button class="mini-btn pri" onclick="closeAllDrawers(false)">完成</button>
+    </div>
+  </div>
+
+  <!-- 使用指引抽屉 -->
+  <div class="drawer" id="guideDrawer">
+    <div class="drawer-head"><span>墨守 · 使用指引</span><span class="drawer-close" onclick="closeGuide(true,true)">收起 (Esc)</span></div>
+    <div class="drawer-body">
+      <div class="guide-item"><span class="guide-num">一.</span><span class="guide-lbl">落子成记</span><span>记录此刻 Mac 桌面每个图标的精确坐标（只动坐标，绝不改动文件）。</span></div>
+      <div class="guide-item"><span class="guide-num">二.</span><span class="guide-lbl">棋盘布阵</span><span>按住棋盘上任意棋子拖动即可排布或互换；支持单步撤销 (⌘Z) 与一键应用。</span></div>
+      <div class="guide-item"><span class="guide-num">三.</span><span class="guide-lbl">归位回溯</span><span>桌面被打乱后点「归位」二次确认还原；点「回溯」预览并切回任意历史时刻。</span></div>
+      <div class="guide-item"><span class="guide-num">四.</span><span class="guide-lbl">随时回顾</span><span>点击左上角「墨守」旁圆点可随时重新打开本指引或重播开场动画。</span></div>
+    </div>
+    <div class="drawer-foot">
+      <button class="mini-btn" onclick="replayIntroFromGuide()">重播开场动画</button>
+      <button class="mini-btn pri" onclick="closeGuide(true,true)">知道了，开始使用</button>
+    </div>
+  </div>
+
+  <canvas id="veilCanvas"></canvas>
+</div>
+
+<script>
+const TYPES = [
+  { k:"app",   lbl:"软件" },
+  { k:"dir",   lbl:"文件夹" },
+  { k:"arc",   lbl:"压缩包" },
+  { k:"doc",   lbl:"文档" },
+  { k:"sys",   lbl:"系统" },
+  { k:"other", lbl:"其他" }
+];
+const TYPE_MAP = Object.fromEntries(TYPES.map(t => [t.k, t.lbl]));
+
+let state = {
+  dark: false, seenGuide: false, root: "", exeDir: "",
+  snap: null, items: [], cal: Array(30).fill(0),
+  armed: false, busy: false, filterType: null,
+  draftDirty: false, draftBackup: null, draftStack: [], absorbedSet: new Set(), absorbHover: -1, dwellIdx: -1, dwellT0: 0, absorbReady: false,
+  histItems: [], previewFile: null, previewSnap: null,
+  grid: { gx0: 40, gdx: 100, gy0: 40, gdy: 100, ci0: 0, ci1: 12, ri0: 0, ri1: 7, ox: 0, oy: 0, k: 0.25, rad: 6 },
+  dots: [], // { item, ci, ri, cx, cy, x, y, sc, op, ty }
+  wetRings: [], scanLine: null,
+  drag: { idx: -1, moved: false, startX: 0, startY: 0, origX: 0, origY: 0, targetC: 0, targetR: 0 },
+  hoverIdx: -1
+};
+
+const boardCv = document.getElementById("boardCanvas");
+const bCtx = boardCv.getContext("2d");
+const veilCv = document.getElementById("veilCanvas");
+const vCtx = veilCv.getContext("2d");
+const calCv = document.getElementById("calCanvas");
+const cCtx = calCv.getContext("2d");
+const shellEl = document.getElementById("shell");
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function typeColor(t){ return cssVar("--" + (TYPE_MAP[t] ? t : "other")); }
+function setStatus(s){ document.getElementById("tStatus").textContent = s; }
+
+function api(path, body){
+  return fetch(path, body ? {
+    method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)
+  } : {}).then(r => r.json());
+}
+
+function inferStep(vals, fallback){
+  if (!vals || vals.length < 2) return fallback;
+  const s = [...vals].sort((a,b) => a - b);
+  const uniq = [];
+  for (const v of s) if (!uniq.length || v - uniq[uniq.length-1] >= 12) uniq.push(v);
+  if (uniq.length < 2) return fallback;
+  const freq = new Map();
+  for (let i = 1; i < uniq.length; i++){
+    const d = uniq[i] - uniq[i-1];
+    if (d < 36 || d > 400) continue;
+    const b = Math.round(d / 2) * 2;
+    freq.set(b, (freq.get(b) || 0) + 1);
+  }
+  let bestD = 0, bestC = 0;
+  for (const [d, c] of freq.entries()){
+    if (c > bestC || (c === bestC && d < bestD)){ bestC = c; bestD = d; }
+  }
+  return bestD >= 36 ? bestD : fallback;
+}
+
+function layoutBoard(){
+  const rect = boardCv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  boardCv.width = Math.max(10, Math.round(rect.width * dpr));
+  boardCv.height = Math.max(10, Math.round(rect.height * dpr));
+  bCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = rect.width, H = rect.height;
+  const items = state.items;
+  if (!items.length){ state.dots = []; renderBoard(); return; }
+
+  const xs = items.map(d => d.x), ys = items.map(d => d.y);
+  const gx0 = Math.min(...xs), gy0 = Math.min(...ys);
+  const gdx = inferStep(xs, 100), gdy = inferStep(ys, 104);
+
+  let ci0 = 9999, ci1 = -9999, ri0 = 9999, ri1 = -9999;
+  const coords = items.map(d => {
+    const ci = Math.round((d.x - gx0) / gdx);
+    const ri = Math.round((d.y - gy0) / gdy);
+    if (ci < ci0) ci0 = ci; if (ci > ci1) ci1 = ci;
+    if (ri < ri0) ri0 = ri; if (ri > ri1) ri1 = ri;
+    return { ci, ri };
+  });
+
+  const xmin = gx0 + ci0 * gdx - gdx * 0.5, xmax = gx0 + ci1 * gdx + gdx * 0.5;
+  const ymin = gy0 + ri0 * gdy - gdy * 0.5, ymax = gy0 + ri1 * gdy + gdy * 0.5;
+  const padX = 16, padY = 18;
+  const k = Math.min((W - padX * 2) / Math.max(1, xmax - xmin), (H - padY * 2) / Math.max(1, ymax - ymin));
+  const contentW = (xmax - xmin) * k, contentH = (ymax - ymin) * k;
+  const ox = (W - contentW) / 2 - xmin * k;
+  const oy = (H - contentH) / 2 - ymin * k;
+  const rad = Math.max(3.5, 0.24 * Math.min(gdx * k, gdy * k));
+
+  state.grid = { gx0, gdx, gy0, gdy, ci0, ci1, ri0, ri1, ox, oy, k, rad, W, H };
+
+  const activeCols = [...new Set(coords.map(c => c.ci))].sort((a,b)=>a-b);
+  const colRank = new Map(activeCols.map((c, idx) => [c, idx]));
+
+  state.dots = items.map((it, i) => {
+    const { ci, ri } = coords[i];
+    const cx = ox + (gx0 + ci * gdx) * k;
+    const cy = oy + (gy0 + ri * gdy) * k;
+    return {
+      item: it, ci, ri, colRank: colRank.get(ci) || 0,
+      cx, cy, x: cx, y: cy, sc: 1, op: 1, ty: it.t || "other"
+    };
+  });
+  updateLegendCounts();
+  renderBoard();
+}
+
+function cellToPos(ci, ri){
+  const g = state.grid;
+  return { x: g.ox + (g.gx0 + ci * g.gdx) * g.k, y: g.oy + (g.gy0 + ri * g.gdy) * g.k };
+}
+
+let gridBoost = 1.0;
+function renderBoard(){
+  const g = state.grid;
+  if (!g.W) return;
+  bCtx.clearRect(0, 0, g.W, g.H);
+  const fg = cssVar("--fg"), verm = cssVar("--verm");
+
+  // 单线透明格线（有棋子 0.13 / 空档 0.04）
+  const usedC = new Set(state.dots.map(d => d.ci));
+  const usedR = new Set(state.dots.map(d => d.ri));
+  const topY = Math.max(6, cellToPos(g.ci0, g.ri0).y - 8);
+  const botY = Math.min(g.H - 6, cellToPos(g.ci0, g.ri1).y + 8);
+  const leftX = Math.max(6, cellToPos(g.ci0, g.ri0).x - 8);
+  const rightX = Math.min(g.W - 6, cellToPos(g.ci1, g.ri0).x + 8);
+
+  bCtx.strokeStyle = fg;
+  for (let c = g.ci0; c <= g.ci1; c++){
+    const x = cellToPos(c, g.ri0).x;
+    const has = usedC.has(c);
+    bCtx.globalAlpha = Math.min(0.45, (has ? 0.13 : 0.04) * gridBoost);
+    bCtx.lineWidth = has ? 1 : 0.7;
+    bCtx.beginPath(); bCtx.moveTo(x, topY); bCtx.lineTo(x, botY); bCtx.stroke();
+  }
+  for (let r = g.ri0; r <= g.ri1; r++){
+    const y = cellToPos(g.ci0, r).y;
+    const has = usedR.has(r);
+    bCtx.globalAlpha = Math.min(0.45, (has ? 0.13 : 0.04) * gridBoost);
+    bCtx.lineWidth = has ? 1 : 0.7;
+    bCtx.beginPath(); bCtx.moveTo(leftX, y); bCtx.lineTo(rightX, y); bCtx.stroke();
+  }
+
+  // 保存纵轴朱砂扫线
+  if (state.scanLine){
+    const sx = state.scanLine.x, sop = state.scanLine.op;
+    const grd = bCtx.createLinearGradient(sx - 24, 0, sx, 0);
+    grd.addColorStop(0, "transparent");
+    grd.addColorStop(1, verm);
+    bCtx.globalAlpha = sop * 0.16;
+    bCtx.fillStyle = grd;
+    bCtx.fillRect(sx - 24, 6, 24, g.H - 12);
+    bCtx.globalAlpha = sop * 0.72;
+    bCtx.strokeStyle = verm; bCtx.lineWidth = 1.6;
+    bCtx.beginPath(); bCtx.moveTo(sx, 8); bCtx.lineTo(sx, g.H - 8); bCtx.stroke();
+  }
+
+  // 水痕与回撤虚影环
+  const now = performance.now();
+  state.wetRings = state.wetRings.filter(w => now - w.t0 < w.dur);
+  for (const w of state.wetRings){
+    const p = Math.max(0, Math.min(1, (now - w.t0) / w.dur));
+    const sc = w.retract ? (1.4 - 1.1 * p * p) : (0.4 + 1.85 * (1 - Math.pow(1 - p, 3)));
+    const op = w.peak * (p < 0.2 ? p / 0.2 : 1 - (p - 0.2) / 0.8);
+    bCtx.globalAlpha = Math.max(0, op);
+    bCtx.strokeStyle = w.col; bCtx.lineWidth = 1.3;
+    bCtx.beginPath(); bCtx.arc(w.x, w.y, g.rad * sc, 0, Math.PI * 2); bCtx.stroke();
+  }
+
+  // 拖拽目标交点预告环（拖到文件夹上时呈石绿收纳环，其余呈朱砂互换/移动环）
+  if (state.drag.idx >= 0 && state.drag.moved){
+    const tp = cellToPos(state.drag.targetC, state.drag.targetR);
+    const isAbs = state.absorbHover >= 0;
+    const rc = isAbs ? typeColor("dir") : verm;
+    bCtx.globalAlpha = isAbs ? 0.92 : 0.85;
+    bCtx.strokeStyle = rc; bCtx.lineWidth = isAbs ? 1.8 : 1.5; bCtx.setLineDash([3, 2.5]);
+    bCtx.beginPath(); bCtx.arc(tp.x, tp.y, g.rad * (isAbs ? 1.65 : 1.45), 0, Math.PI * 2); bCtx.stroke();
+    bCtx.setLineDash([]);
+  }
+
+  // 棋子（0.0px 精确交点 + 柔边墨晕）
+  for (let i = 0; i < state.dots.length; i++){
+    if (state.absorbedSet.has(i)) continue;
+    const d = state.dots[i];
+    if (d.op <= 0.01) continue;
+    let op = d.op;
+    let sc = d.sc;
+    if (state.filterType){
+      if (d.ty !== state.filterType) op *= 0.22;
+      else sc *= 1.22;
+    }
+    if (state.hoverIdx === i && state.drag.idx < 0) sc *= 1.26;
+    if (state.drag.idx === i && state.drag.moved) sc *= 1.35;
+    if (state.absorbHover === i) sc *= 1.48;
+    const r = g.rad * sc;
+    const col = typeColor(d.ty);
+    const rg = bCtx.createRadialGradient(d.x, d.y, 0, d.x, d.y, r * 1.15);
+    rg.addColorStop(0, col);
+    rg.addColorStop(0.58, col);
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    bCtx.globalAlpha = op;
+    bCtx.fillStyle = rg;
+    bCtx.beginPath(); bCtx.arc(d.x, d.y, r * 1.15, 0, Math.PI * 2); bCtx.fill();
+  }
+  bCtx.globalAlpha = 1;
+}
+
+function renderCalendar(){
+  const rect = calCv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  calCv.width = Math.max(10, Math.round(rect.width * dpr));
+  calCv.height = Math.max(10, Math.round(rect.height * dpr));
+  cCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = rect.width, H = rect.height, baseY = H - 6;
+  const fg = cssVar("--fg"), fg3 = cssVar("--fg3"), verm = cssVar("--verm");
+  const step = (W - 20) / 29;
+  cCtx.strokeStyle = fg3; cCtx.globalAlpha = 0.24; cCtx.lineWidth = 1;
+  cCtx.beginPath(); cCtx.moveTo(8, baseY); cCtx.lineTo(W - 8, baseY); cCtx.stroke();
+
+  const mx = Math.max(2, ...state.cal);
+  let total = 0;
+  for (let i = 0; i < 30; i++){
+    total += state.cal[i];
+    const x = 10 + i * step;
+    const isToday = i === 29, isWeek = (29 - i) % 7 === 0;
+    if (state.cal[i] <= 0){
+      cCtx.strokeStyle = isToday ? verm : fg3;
+      cCtx.globalAlpha = isToday ? 0.55 : (isWeek ? 0.30 : 0.16);
+      cCtx.lineWidth = isWeek ? 1.2 : 1;
+      cCtx.beginPath(); cCtx.moveTo(x, baseY); cCtx.lineTo(x, baseY - (isWeek ? 5 : 2.5)); cCtx.stroke();
+    } else {
+      const h = 10 + (H - 22) * (state.cal[i] / mx);
+      cCtx.strokeStyle = isToday ? verm : fg;
+      cCtx.globalAlpha = isToday ? 0.88 : 0.62;
+      cCtx.lineWidth = 2.8; cCtx.lineCap = "round";
+      cCtx.beginPath(); cCtx.moveTo(x, baseY - 1); cCtx.lineTo(x, baseY - h); cCtx.stroke();
+    }
+  }
+  cCtx.globalAlpha = 1;
+  const d = new Date();
+  document.getElementById("tCalDate").textContent = String(d.getMonth()+1).padStart(2,"0") + "." + String(d.getDate()).padStart(2,"0");
+  document.getElementById("tCalMeta").textContent = total > 0 ? `近30日 · ${total} 次` : "尚无落笔";
+}
+
+function buildLegend(){
+  const row = document.getElementById("legendRow");
+  row.innerHTML = "";
+  for (const t of TYPES){
+    const el = document.createElement("div");
+    el.className = "leg-chip";
+    el.innerHTML = `<span class="leg-dot" style="background:var(--${t.k})"></span><span>${t.lbl}</span><span class="leg-cnt" id="lc_${t.k}"></span>`;
+    el.onmouseenter = () => { state.filterType = t.k; renderBoard(); };
+    el.onmouseleave = () => { state.filterType = null; renderBoard(); };
+    row.appendChild(el);
+  }
+}
+
+function updateLegendCounts(){
+  const cnt = {};
+  for (const d of state.dots) cnt[d.ty] = (cnt[d.ty] || 0) + 1;
+  for (const t of TYPES){
+    const el = document.getElementById("lc_" + t.k);
+    if (el) el.textContent = cnt[t.k] ? cnt[t.k] : "";
+  }
+}
+
+/* ---------- 棋盘交互：实时水墨浮卡 + 拖拽草稿布阵 + 局部单步撤销 ---------- */
+function hitDot(mx, my){
+  const r = Math.max(9, state.grid.rad * 1.45);
+  for (let i = state.dots.length - 1; i >= 0; i--){
+    if (state.absorbedSet.has(i)) continue;
+    const d = state.dots[i];
+    if (Math.hypot(mx - d.x, my - d.y) <= r) return i;
+  }
+  return -1;
+}
+
+function canAbsorbInto(srcIdx, dstIdx){
+  if (srcIdx < 0 || dstIdx < 0 || srcIdx === dstIdx) return false;
+  return state.dots[dstIdx].ty === "dir" && state.dots[srcIdx].ty !== "sys";
+}
+
+function showPreview(idx, extra){
+  const card = document.getElementById("previewCard");
+  if (idx < 0 || idx >= state.dots.length){ card.classList.remove("show"); return; }
+  const d = state.dots[idx], g = state.grid;
+  document.getElementById("pvPip").style.background = typeColor(d.ty);
+  document.getElementById("pvName").textContent = d.item.n;
+  document.getElementById("pvSub").textContent = extra || `${TYPE_MAP[d.ty]||"其他"} · 第${d.ci-g.ci0+1}列 第${d.ri-g.ri0+1}行 (${d.item.x},${d.item.y})`;
+  let left = d.x + 16, top = d.y - 48;
+  if (left + 220 > g.W) left = d.x - 220;
+  if (left < 8) left = 8;
+  if (top < 8) top = d.y + 16;
+  card.style.left = left + "px"; card.style.top = top + "px";
+  card.classList.add("show");
+}
+
+boardCv.addEventListener("mousemove", e => {
+  const r = boardCv.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (state.drag.idx >= 0){
+    const d = state.dots[state.drag.idx], g = state.grid;
+    const dx = mx - state.drag.startX, dy = my - state.drag.startY;
+    if (!state.drag.moved && Math.hypot(dx, dy) > 3.5){
+      state.drag.moved = true; gridBoost = 2.0;
+    }
+    if (state.drag.moved){
+      d.x = state.drag.origX + dx; d.y = state.drag.origY + dy;
+      const deskX = (d.x - g.ox) / g.k, deskY = (d.y - g.oy) / g.k;
+      const tci = Math.max(g.ci0, Math.min(g.ci1, Math.round((deskX - g.gx0) / g.gdx)));
+      const tri = Math.max(g.ri0, Math.min(g.ri1, Math.round((deskY - g.gy0) / g.gdy)));
+      state.drag.targetC = tci; state.drag.targetR = tri;
+      const occ = state.dots.findIndex((o, i) => i !== state.drag.idx && !state.absorbedSet.has(i) && o.ci === tci && o.ri === tri);
+      const isFolder = canAbsorbInto(state.drag.idx, occ);
+      if (isFolder){
+        if (state.dwellIdx !== occ){ state.dwellIdx = occ; state.dwellT0 = performance.now(); state.absorbReady = !!e.shiftKey; }
+        else if (!state.absorbReady && (e.shiftKey || performance.now() - state.dwellT0 >= 450)){ state.absorbReady = true; }
+        state.absorbHover = state.absorbReady ? occ : -1;
+      } else {
+        state.dwellIdx = -1; state.absorbReady = false; state.absorbHover = -1;
+      }
+      const isAbs = isFolder && state.absorbReady;
+      const hint = isAbs
+        ? `松手收纳进文件夹「${state.dots[occ].item.n}」`
+        : (isFolder
+          ? `松手与「${state.dots[occ].item.n}」互换（停顿/Shift 收纳）`
+          : (occ >= 0
+            ? `松手与「${state.dots[occ].item.n}」互换 · 第${tci-g.ci0+1}列 第${tri-g.ri0+1}行`
+            : `移至 第${tci-g.ci0+1}列 第${tri-g.ri0+1}行`));
+      showPreview(state.drag.idx, hint);
+      renderBoard();
+    }
+    return;
+  }
+  const hi = hitDot(mx, my);
+  if (hi !== state.hoverIdx){
+    state.hoverIdx = hi;
+    boardCv.style.cursor = hi >= 0 ? "grab" : "default";
+    showPreview(hi);
+    renderBoard();
+  }
+});
+
+boardCv.addEventListener("mouseleave", () => {
+  if (state.drag.idx < 0){ state.hoverIdx = -1; showPreview(-1); renderBoard(); }
+});
+
+boardCv.addEventListener("mousedown", e => {
+  if (state.busy || document.querySelector(".drawer.open")) return;
+  const r = boardCv.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const idx = hitDot(mx, my);
+  if (idx < 0){ if (state.armed) disarm(); return; }
+  const d = state.dots[idx];
+  state.drag = { idx, moved:false, startX:mx, startY:my, origX:d.x, origY:d.y, targetC:d.ci, targetR:d.ri };
+  boardCv.style.cursor = "grabbing";
+});
+
+window.addEventListener("mouseup", () => {
+  if (state.drag.idx < 0) return;
+  const idx = state.drag.idx, moved = state.drag.moved;
+  const d = state.dots[idx], g = state.grid;
+  const oldC = d.ci, oldR = d.ri, newC = state.drag.targetC, newR = state.drag.targetR;
+  const doAbsorb = state.absorbReady && state.dwellIdx >= 0;
+  state.drag.idx = -1; state.drag.moved = false; state.absorbHover = -1; state.dwellIdx = -1; state.absorbReady = false; gridBoost = 1.0;
+  boardCv.style.cursor = "default"; showPreview(-1);
+
+  if (!moved){
+    setStatus(`${d.item.n} · ${TYPE_MAP[d.ty]||"其他"} · (${d.item.x}, ${d.item.y}) · 按住拖动可排布或拖入文件夹收纳`);
+    renderBoard(); return;
+  }
+  if (newC !== oldC || newR !== oldR){
+    if (!state.draftDirty){
+      state.draftBackup = state.items.map(it => ({...it}));
+      state.draftDirty = true; state.draftStack = []; state.absorbedSet = new Set(); disarm();
+    }
+    const occ = state.dots.findIndex((o, i) => i !== idx && !state.absorbedSet.has(i) && o.ci === newC && o.ri === newR);
+    if (doAbsorb && canAbsorbInto(idx, occ)){
+      const fp = cellToPos(newC, newR);
+      state.draftStack.push({ isAbsorb:true, idxA:idx, oldCA:oldC, oldRA:oldR, newCA:newC, newRA:newR, idxB:occ, srcName:d.item.n, folderName:state.dots[occ].item.n });
+      state.absorbedSet.add(idx);
+      state.wetRings.push({ x:fp.x, y:fp.y, col:typeColor("dir"), t0:performance.now(), dur:400, peak:0.52, retract:false });
+      updateDraftUi();
+      renderBoard();
+      return;
+    }
+    state.draftStack.push({ isAbsorb:false, idxA:idx, oldCA:oldC, oldRA:oldR, newCA:newC, newRA:newR, idxB:occ, oldCB:occ>=0?newC:-1, oldRB:occ>=0?newR:-1 });
+    if (occ >= 0){
+      const o = state.dots[occ];
+      o.ci = oldC; o.ri = oldR;
+      o.item.x = Math.round(g.gx0 + oldC * g.gdx); o.item.y = Math.round(g.gy0 + oldR * g.gdy);
+      const op = cellToPos(oldC, oldR); o.cx = op.x; o.cy = op.y;
+      tweenDot(o, op.x, op.y, 220);
+    }
+    d.ci = newC; d.ri = newR;
+    d.item.x = Math.round(g.gx0 + newC * g.gdx); d.item.y = Math.round(g.gy0 + newR * g.gdy);
+    const np = cellToPos(newC, newR); d.cx = np.x; d.cy = np.y;
+    tweenDot(d, np.x, np.y, 220);
+    state.wetRings.push({ x:np.x, y:np.y, col:typeColor(d.ty), t0:performance.now(), dur:380, peak:0.36, retract:false });
+    updateDraftUi();
+  } else {
+    tweenDot(d, d.cx, d.cy, 180);
+  }
+});
+
+function tweenDot(d, tx, ty, dur){
+  const sx = d.x, sy = d.y, t0 = performance.now();
+  function step(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    d.x = sx + (tx - sx) * e; d.y = sy + (ty - sy) * e;
+    renderBoard();
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function updateDraftUi(){
+  const n = state.draftStack.length;
+  const abs = state.draftStack.filter(o => o.isAbsorb).length;
+  const b1 = document.getElementById("btnSaveLbl"), b2 = document.getElementById("btnRestoreLbl");
+  const btn2 = document.getElementById("btnRestore");
+  if (n <= 0){
+    state.draftDirty = false; state.draftBackup = null; state.absorbedSet = new Set();
+    b1.textContent = "落子成记"; b2.textContent = "归位";
+    btn2.dataset.retract = "";
+    setStatus("已全部撤回 · 桌面未做任何改动");
+    return;
+  }
+  b1.textContent = abs > 0 ? `应用布阵 (含收纳${abs})` : `应用布阵 (${n})`;
+  b2.textContent = "撤销一步";
+  btn2.dataset.retract = "1";
+  setStatus(abs > 0
+    ? `布阵草稿 · 共 ${n} 步（含收纳 ${abs} 项入文件夹）· ⌘Z 单步撤销，Esc 重置`
+    : `布阵草稿 · 共 ${n} 步 · 点「撤销一步」(⌘Z) 局部撤回，Esc 全部重置`);
+}
+
+function undoLastStep(){
+  if (!state.draftDirty || !state.draftStack.length) return;
+  const op = state.draftStack.pop(), g = state.grid;
+  if (op.isBatch && op.snapOld){
+    state.dots.forEach((d, idx) => {
+      if (state.absorbedSet.has(idx) || !op.snapOld[idx]) return;
+      d.ci = op.snapOld[idx].ci; d.ri = op.snapOld[idx].ri;
+      d.item.x = Math.round(g.gx0 + d.ci * g.gdx); d.item.y = Math.round(g.gy0 + d.ri * g.gdy);
+      const p = cellToPos(d.ci, d.ri); d.cx = p.x; d.cy = p.y;
+      tweenDot(d, p.x, p.y, 220);
+    });
+    updateDraftUi();
+    return;
+  }
+  const a = state.dots[op.idxA];
+  if (op.isAbsorb && a){
+    state.absorbedSet.delete(op.idxA);
+    const fp = cellToPos(op.newCA, op.newRA);
+    state.wetRings.push({ x:fp.x, y:fp.y, col:cssVar("--verm"), t0:performance.now(), dur:320, peak:0.55, retract:true });
+    a.x = fp.x; a.y = fp.y;
+    a.ci = op.oldCA; a.ri = op.oldRA;
+    a.item.x = Math.round(g.gx0 + op.oldCA * g.gdx); a.item.y = Math.round(g.gy0 + op.oldRA * g.gdy);
+    const p = cellToPos(op.oldCA, op.oldRA); a.cx = p.x; a.cy = p.y;
+    tweenDot(a, p.x, p.y, 240);
+    updateDraftUi();
+    return;
+  }
+  if (a){
+    const oldGhost = cellToPos(op.newCA, op.newRA);
+    state.wetRings.push({ x:oldGhost.x, y:oldGhost.y, col:cssVar("--verm"), t0:performance.now(), dur:320, peak:0.55, retract:true });
+    a.ci = op.oldCA; a.ri = op.oldRA;
+    a.item.x = Math.round(g.gx0 + op.oldCA * g.gdx); a.item.y = Math.round(g.gy0 + op.oldRA * g.gdy);
+    const p = cellToPos(op.oldCA, op.oldRA); a.cx = p.x; a.cy = p.y;
+    tweenDot(a, p.x, p.y, 220);
+  }
+  if (op.idxB >= 0 && state.dots[op.idxB]){
+    const b = state.dots[op.idxB];
+    b.ci = op.oldCB; b.ri = op.oldRB;
+    b.item.x = Math.round(g.gx0 + op.oldCB * g.gdx); b.item.y = Math.round(g.gy0 + op.oldRB * g.gdy);
+    const p = cellToPos(op.oldCB, op.oldRB); b.cx = p.x; b.cy = p.y;
+    tweenDot(b, p.x, p.y, 220);
+  }
+  updateDraftUi();
+}
+
+function cancelDraft(){
+  if (!state.draftDirty) return;
+  if (state.draftBackup) state.items = state.draftBackup.map(it => ({...it}));
+  state.draftStack = []; state.absorbedSet = new Set();
+  updateDraftUi();
+  layoutBoard();
+  setStatus("已重置全部布阵 · 桌面未做任何改动");
+}
+
+/* ---------- 按钮有机水墨洇开 + 撤销「收笔回撤」收缩动画 ---------- */
+function attachInkBtn(el, onClick){
+  el.addEventListener("mousedown", e => {
+    el.classList.add("pressing");
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const isRetract = el.dataset.retract === "1";
+    const isDark = state.dark, isPri = el.classList.contains("primary");
+    if (isRetract){
+      spawnBtnBlob(el, x, y, 160, cssVar("--verm"), 0.35, 320, true);
+    } else if (isPri && !isDark){
+      spawnBtnBlob(el, x, y, 150, "#F4F0E6", 0.56, 380, false);
+      setTimeout(() => spawnBtnBlob(el, x, y, 110, "#C9573F", 0.84, 340, false), 40);
+    } else {
+      spawnBtnBlob(el, x, y, 140, cssVar("--verm"), 0.42, 360, false);
+    }
+  });
+  const release = () => setTimeout(() => el.classList.remove("pressing"), 260);
+  el.addEventListener("mouseup", () => { release(); onClick(); });
+  el.addEventListener("mouseleave", release);
+}
+
+function spawnBtnBlob(host, x, y, size, col, opPeak, dur, retract){
+  const b = document.createElement("div");
+  b.className = "rip-blob";
+  b.style.width = size + "px"; b.style.height = size + "px";
+  b.style.left = x + "px"; b.style.top = y + "px";
+  b.style.background = `radial-gradient(circle, ${col} 0%, ${col} 28%, transparent 72%)`;
+  host.appendChild(b);
+  const anim = b.animate(
+    retract
+      ? [{ transform:"translate(-50%,-50%) scale(1.18)", opacity:opPeak }, { transform:"translate(-50%,-50%) scale(0.14)", opacity:0 }]
+      : [{ transform:"translate(-50%,-50%) scale(0.12)", opacity:opPeak }, { transform:"translate(-50%,-50%) scale(1.18)", opacity:0 }],
+    { duration: dur, easing: retract ? "cubic-bezier(.55,.06,.68,.19)" : "cubic-bezier(.16,1,.3,1)" }
+  );
+  anim.onfinish = () => b.remove();
+}
+
+/* ---------- 保存「扫谱落印」与 归位「黄金角散开→顺滑归回」动画 ---------- */
+function animSave(){
+  const g = state.grid; if (!g.W) return;
+  const t0 = performance.now();
+  const stamped = new Set();
+  function frame(now){
+    const dt = now - t0;
+    gridBoost = dt < 220 ? 1 + 1.5 * (dt/220) : (dt < 920 ? 2.5 : Math.max(1, 2.5 - 1.5 * (dt-920)/300));
+    if (dt >= 80 && dt <= 740){
+      const p = (dt - 80) / 660;
+      const ep = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      state.scanLine = { x: g.W * ep, op: p > 0.85 ? (1-p)/0.15 : 1 };
+    } else state.scanLine = null;
+
+    for (let i = 0; i < state.dots.length; i++){
+      const d = state.dots[i], dl = 110 + d.colRank * 54;
+      if (dt >= dl && dt <= dl + 320){
+        const p = (dt - dl) / 320;
+        d.sc = p < 0.38 ? (1 + 0.24 * Math.sin(p/0.38 * Math.PI/2)) : (1.24 - 0.24 * (p-0.38)/0.62);
+        if (!stamped.has(i)){
+          stamped.add(i);
+          state.wetRings.push({ x:d.cx, y:d.cy, col:typeColor(d.ty), t0:now, dur:360, peak:0.34, retract:false });
+        }
+      } else d.sc = 1;
+    }
+    renderBoard();
+    if (dt < 1260) requestAnimationFrame(frame);
+    else { gridBoost = 1; state.scanLine = null; state.dots.forEach(d=>d.sc=1); renderBoard(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function animRestore(){
+  if (!state.dots.length) return;
+  const t0 = performance.now();
+  const offs = state.dots.map((_, i) => {
+    const ang = i * 2.399963, dist = 14 + (i % 3) * 5;
+    return { dx: Math.cos(ang)*dist, dy: Math.sin(ang)*dist };
+  });
+  const ringed = new Set();
+  function frame(now){
+    const dt = now - t0;
+    if (dt < 260){
+      const e = 1 - Math.pow(1 - dt/260, 3);
+      state.dots.forEach((d, i) => { d.x = d.cx + offs[i].dx*e; d.y = d.cy + offs[i].dy*e; d.sc = 1 - 0.2*e; d.op = 1 - 0.52*e; });
+      gridBoost = 1 + 1.7 * Math.max(0, (dt - 140)/120);
+    } else if (dt < 340){
+      gridBoost = 2.7;
+    } else {
+      gridBoost = dt < 1020 ? 2.7 : Math.max(1, 2.7 - 1.7 * (dt - 1020)/300);
+      state.dots.forEach((d, i) => {
+        const dl = 340 + d.colRank * 38;
+        if (dt < dl) return;
+        const p = Math.min(1, (dt - dl) / 380);
+        const e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+        d.x = d.cx + offs[i].dx * (1 - e);
+        d.y = d.cy + offs[i].dy * (1 - e);
+        d.sc = 0.8 + 0.2 * e;
+        d.op = 0.48 + 0.52 * e;
+        if (p >= 0.82 && !ringed.has(i)){
+          ringed.add(i);
+          state.wetRings.push({ x:d.cx, y:d.cy, col:typeColor(d.ty), t0:now, dur:360, peak:0.32, retract:false });
+        }
+      });
+    }
+    renderBoard();
+    if (dt < 1360) requestAnimationFrame(frame);
+    else { gridBoost = 1; state.dots.forEach(d => { d.x=d.cx; d.y=d.cy; d.sc=1; d.op=1; }); renderBoard(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 2.68s 舒缓开场动画（阴阳双键 + 朱砂日轮散底点 + 六色古矿彩研墨，重播彻底清场） ---------- */
+function anchorOf(el){
+  const sr = shellEl.getBoundingClientRect(), er = el.getBoundingClientRect();
+  return { x: er.left - sr.left + er.width/2, y: er.top - sr.top + er.height/2 };
+}
+
+function playIntro(autoGuide){
+  const sr = shellEl.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  veilCv.width = Math.round(sr.width * dpr); veilCv.height = Math.round(sr.height * dpr);
+  vCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = sr.width, H = sr.height;
+
+  // 重播前彻底隐藏全部界面区块与棋子，保证每次都从纯白宣纸/纯黑夜墨起势
+  const els = ["headerEl","boardWrap","calSection","actionBar","statusBar"].map(id => document.getElementById(id));
+  els.forEach(el => el.classList.add("intro-hide"));
+  state.dots.forEach(d => { d.op = 0; d.sc = 0.35; });
+  renderBoard();
+
+  const cx = W * 0.5, cy = H * 0.39;
+  const btnL = anchorOf(document.getElementById("btnSave"));
+  const btnR = anchorOf(document.getElementById("btnRestore"));
+  const closePt = anchorOf(document.getElementById("btnClose"));
+  const pips = [0,1,2].map(i => anchorOf(document.getElementById("pip" + i)));
+  const yinCol = cssVar("--pbtn-bg"), yangCol = state.dark ? "#2B2A20" : "#F6F2E8", yangRim = state.dark ? "#6E6A5C" : "#C9BEA6";
+  const verm = cssVar("--verm"), fg3 = cssVar("--fg3");
+  const pigCols = TYPES.map(t => typeColor(t.k));
+  const pigIdx = Object.fromEntries(TYPES.map((t,i)=>[t.k, i]));
+
+  const t0 = performance.now();
+  const shown = {};
+
+  function drawSoftOrb(x, y, rx, ry, col, op, rim){
+    if (op <= 0.01) return;
+    vCtx.save(); vCtx.translate(x, y); vCtx.scale(rx, ry);
+    const rg = vCtx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    rg.addColorStop(0, col); rg.addColorStop(0.45, col); rg.addColorStop(1, "rgba(0,0,0,0)");
+    vCtx.globalAlpha = op; vCtx.fillStyle = rg;
+    vCtx.beginPath(); vCtx.arc(0, 0, 1, 0, Math.PI*2); vCtx.fill();
+    if (rim){ vCtx.strokeStyle = rim; vCtx.lineWidth = 1.4 / Math.max(rx, ry); vCtx.beginPath(); vCtx.arc(0,0,0.72,0,Math.PI*2); vCtx.stroke(); }
+    vCtx.restore();
+  }
+
+  function frame(now){
+    const dt = now - t0;
+    vCtx.clearRect(0, 0, W, H);
+
+    // 1. 全程顺时针变速阴阳双珠 (0..1080ms)
+    if (dt < 1120){
+      const orbs = [
+        { ph:0, target:btnL, col:yinCol, eye:yangCol, rim:null, flyMs:380, isYin:true },
+        { ph:Math.PI, target:btnR, col:yangCol, eye:yinCol, rim:yangRim, flyMs:420, isYin:false }
+      ];
+      for (const o of orbs){
+        const orbMs = 680, sweep = Math.PI * 2.36;
+        let x, y, rx = 30, ry = 30, op = dt < 160 ? dt/160 : (dt > orbMs + o.flyMs - 140 ? Math.max(0, 1 - (dt - (orbMs + o.flyMs - 140))/180) : 0.94);
+        if (dt <= orbMs){
+          const t = dt / orbMs, s = t*t*(3 - 2*t), ramped = 0.28*t + 0.72*s;
+          const ang = o.ph + sweep * ramped;
+          const rad = 16 + 34 * Math.pow(2*ramped - 1, 2);
+          x = cx + Math.cos(ang)*rad; y = cy + Math.sin(ang)*rad;
+        } else {
+          const u = Math.min(1, (dt - orbMs) / o.flyMs), eu = 1 - Math.pow(1 - u, 2.6), om = 1 - eu;
+          const endAng = o.ph + sweep, sx = cx + Math.cos(endAng)*50, sy = cy + Math.sin(endAng)*50;
+          const tx = -Math.sin(endAng), ty = Math.cos(endAng);
+          const c1x = sx + tx*(o.isYin ? 68 : 115), c1y = sy + ty*(o.isYin ? 68 : 85);
+          const c2x = o.target.x + (o.isYin ? 22 : 52), c2y = o.target.y - (o.isYin ? 42 : 95);
+          x = om*om*om*sx + 3*om*om*eu*c1x + 3*om*eu*eu*c2x + eu*eu*eu*o.target.x;
+          y = om*om*om*sy + 3*om*om*eu*c1y + 3*om*eu*eu*c2y + eu*eu*eu*o.target.y;
+          rx = 30 * (1 + 1.55*eu); ry = 30 * (1 - 0.26*eu);
+        }
+        drawSoftOrb(x, y, rx, ry, o.col, op, o.rim);
+        if (dt <= orbMs + 120) drawSoftOrb(x, y, 7, 7, o.eye, op * 0.65);
+      }
+    }
+    if (dt >= 300 && dt <= 780){
+      const p = (dt - 300) / 480;
+      vCtx.globalAlpha = 0.34 * (1 - p); vCtx.strokeStyle = fg3; vCtx.lineWidth = 1.4;
+      vCtx.beginPath(); vCtx.arc(cx, cy, 22 + 86 * (1 - Math.pow(1-p, 3)), 0, Math.PI*2); vCtx.stroke();
+    }
+    if (dt >= 920 && !shown.act){ shown.act = true; document.getElementById("actionBar").classList.remove("intro-hide"); }
+
+    // 2. 右上角朱砂日轮 + 变速三缕星点落底栏 (540..1360ms)
+    if (dt >= 540 && dt <= 1000){
+      const p = (dt - 540) / 460;
+      drawSoftOrb(closePt.x, closePt.y, 14 + 32*(1-Math.pow(1-p,3)), 14 + 32*(1-Math.pow(1-p,3)), verm, 0.85*(p<0.25?p/0.25:1-(p-0.25)/0.75));
+    }
+    if (dt >= 640 && !shown.hdr){ shown.hdr = true; document.getElementById("headerEl").classList.remove("intro-hide"); }
+    for (let i = 0; i < 3; i++){
+      const s0 = 720 + i * 75, dur = 420;
+      if (dt >= s0 && dt <= s0 + dur){
+        const u = (dt - s0) / dur, eu = 1 - Math.pow(1 - u, 2.4);
+        const mx = (closePt.x + pips[i].x)*0.5 - 28 - i*16, my = closePt.y + (pips[i].y - closePt.y)*0.32;
+        const x = (1-eu)*(1-eu)*closePt.x + 2*(1-eu)*eu*mx + eu*eu*pips[i].x;
+        const y = (1-eu)*(1-eu)*closePt.y + 2*(1-eu)*eu*my + eu*eu*pips[i].y;
+        drawSoftOrb(x, y, 7.5, 7.5, verm, 0.92);
+      }
+      if (dt >= s0 + dur - 30 && dt <= s0 + dur + 260){
+        const p = (dt - (s0 + dur - 30)) / 290;
+        vCtx.globalAlpha = 0.55*(1-p); vCtx.strokeStyle = verm; vCtx.lineWidth = 1.2;
+        vCtx.beginPath(); vCtx.arc(pips[i].x, pips[i].y, 4 + 13*p, 0, Math.PI*2); vCtx.stroke();
+      }
+    }
+    if (dt >= 1140 && !shown.st){ shown.st = true; document.getElementById("statusBar").classList.remove("intro-hide"); }
+
+    // 3. 六色古矿彩变速绽放 + 唤醒棋盘 (920..2200ms)
+    for (let m = 0; m < 6; m++){
+      const s0 = 920 + m * 35;
+      if (dt >= s0 && dt <= s0 + 720){
+        const p = (dt - s0) / 720;
+        const moveP = Math.min(1, p / 0.58);
+        const easeM = 1 - Math.pow(1 - moveP, 3);
+        const ang = -Math.PI/2 + m*(Math.PI*2/6) + 0.95 * easeM;
+        const r = 56 * easeM;
+        const rad = 13 * (p < 0.58 ? (0.4 + 0.8*easeM) : (1.2 + 1.0*(p-0.58)/0.42));
+        const op = p < 0.2 ? p/0.2 : (p < 0.58 ? 0.92 : Math.max(0, 0.92*(1-(p-0.58)/0.42)));
+        drawSoftOrb(cx + Math.cos(ang)*r, cy + Math.sin(ang)*r, rad, rad, pigCols[m], op);
+      }
+    }
+    if (dt >= 960 && !shown.bd){ shown.bd = true; document.getElementById("boardWrap").classList.remove("intro-hide"); }
+    if (dt >= 1040 && !shown.cal){ shown.cal = true; document.getElementById("calSection").classList.remove("intro-hide"); }
+
+    if (dt >= 1460){
+      for (const d of state.dots){
+        const dl = 1460 + (pigIdx[d.ty] ?? 5) * 60;
+        if (dt >= dl){
+          const p = Math.min(1, (dt - dl) / 280);
+          d.op = p; d.sc = 0.42 + 0.58 * (1 - Math.pow(1 - p, 3));
+        }
+      }
+      renderBoard();
+    }
+
+    if (dt < 2260) requestAnimationFrame(frame);
+    else {
+      vCtx.clearRect(0, 0, W, H);
+      els.forEach(el => el.classList.remove("intro-hide"));
+      state.dots.forEach(d => { d.op = 1; d.sc = 1; });
+      renderBoard();
+      if (autoGuide && !state.seenGuide) setTimeout(openGuide, 140);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 内置桌面语义分区引擎（系统/通讯/办公/影音/游戏/归档） ---------- */
+function detectZone(name, ty){
+  if (ty === "sys") return "core";
+  const s = (name || "").toLowerCase();
+  if (/微信|wechat|qq|tim|钉钉|dingtalk|飞书|feishu|lark|企业微信|telegram|discord|slack|zoom|腾讯会议|teams|mail|outlook|邮件/.test(s)) return "comm";
+  if (/steam|epic|wegame|原神|genshin|崩坏|鸣潮|英雄联盟|lol|valorant|csgo|cs2|minecraft|battle|riot|xbox|switch|游戏|game/.test(s)) return "game";
+  if (/网易云|music|spotify|酷狗|哔哩哔哩|bilibili|爱奇艺|腾讯视频|优酷|抖音|potplayer|vlc|剪映|capcut|obs|迅雷|百度网盘|夸克|chrome|edge|safari|firefox|浏览器|音乐|视频/.test(s)) return "media";
+  if (ty === "doc" || /word|excel|ppt|wps|pdf|notion|obsidian|vscode|code|cursor|pycharm|idea|xcode|git|photoshop|figma|cad|arcgis|qgis|matlab|python|笔记|作业|论文|报告|项目/.test(s)) return "work";
+  if (ty === "dir" || ty === "arc") return "vault";
+  return "work";
+}
+const ZONE_LBL = { core:"系统", comm:"通讯", work:"办公", media:"影音", game:"游戏", vault:"归档" };
+
+function applyZonePreset(scheme){
+  if (state.busy || !state.dots.length) return;
+  closeAllDrawers(true);
+  ensureDraft();
+  const zOrder = { core:0, comm:1, work:2, media:3, game:4, vault:5 };
+  const zCounts = {}, active = [];
+  state.dots.forEach((d, idx) => {
+    if (state.absorbedSet.has(idx)) return;
+    d._zone = detectZone(d.item.name, d.ty);
+    zCounts[d._zone] = (zCounts[d._zone] || 0) + 1;
+    active.push(idx);
+  });
+  active.sort((a, b) => (zOrder[state.dots[a]._zone] - zOrder[state.dots[b]._zone]) || state.dots[a].item.name.localeCompare(state.dots[b].item.name));
+  const { ci0, ci1, ri0, ri1, gx0, gdx, gy0, gdy } = state.grid;
+  const used = new Set();
+  function nextFree(sc, dc, sr, dr){
+    let c = sc, r = sr;
+    for (let g = 0; g < (ci1-ci0+1)*(ri1-ri0+1)+20; g++){
+      const k = c + ":" + r;
+      if (c >= ci0 && c <= ci1 && r >= ri0 && r <= ri1 && !used.has(k)){ used.add(k); return [c, r]; }
+      r += dr;
+      if (r > ri1 || r < ri0){ r = sr; c += dc; if (c > ci1) c = ci0; if (c < ci0) c = ci1; }
+    }
+    return [ci0, ri0];
+  }
+  const snapOld = state.dots.map(d => ({ ci: d.ci, ri: d.ri }));
+  for (const idx of active){
+    const d = state.dots[idx], z = d._zone;
+    let cell;
+    if (scheme === "left_zone") cell = nextFree(ci0, 1, ri0, 1);
+    else if (scheme === "work_zone") cell = (z==="core"||z==="work"||z==="comm") ? nextFree(ci0,1,ri0,1) : (z==="vault" ? nextFree(ci1,-1,ri0,1) : nextFree(ci1,-1,ri1,-1));
+    else cell = (z==="core"||z==="work") ? nextFree(ci0,1,ri0,1) : (z==="comm" ? nextFree(ci0,1,ri1,-1) : (z==="vault" ? nextFree(ci1,-1,ri0,1) : nextFree(ci1,-1,ri1,-1)));
+    d.ci = cell[0]; d.ri = cell[1];
+    d.item.x = Math.round(gx0 + d.ci * gdx); d.item.y = Math.round(gy0 + d.ri * gdy);
+    const pos = cellToPos(d.ci, d.ri); d.cx = pos.x; d.cy = pos.y;
+    tweenDot(d, pos.x, pos.y, 240);
+  }
+  state.draftStack.push({ isBatch: true, snapOld });
+  updateDraftUi(); renderBoard();
+  const sum = ["comm","work","media","game","vault"].filter(k=>zCounts[k]).map(k=>ZONE_LBL[k]+zCounts[k]).join(" / ");
+  const nm = scheme==="left_zone"?"左翼精排":(scheme==="work_zone"?"效率分治":"四隅六区");
+  setStatus(`已预演「${nm}」（${sum}）· 点「应用布阵」生效，⌘Z/Esc 撤回`);
+}
+
+/* ---------- 收起指引：朱砂微光飞入左上角「墨守」旁圆点提示 ---------- */
+function playGuideHomingHint(){
+  const sr = shellEl.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  veilCv.width = Math.round(sr.width * dpr); veilCv.height = Math.round(sr.height * dpr);
+  vCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = sr.width, H = sr.height, verm = cssVar("--verm");
+  const from = { x: W * 0.24, y: H * 0.68 }, to = anchorOf(document.getElementById("reviewDot"));
+  const t0 = performance.now();
+  function frame(now){
+    const dt = now - t0;
+    vCtx.clearRect(0, 0, W, H);
+    if (dt <= 480){
+      const u = dt / 480, eu = u < 0.5 ? 2*u*u : 1 - Math.pow(-2*u+2, 2)/2;
+      const mx = from.x - 36, my = (from.y + to.y) * 0.45;
+      const x = (1-eu)*(1-eu)*from.x + 2*(1-eu)*eu*mx + eu*eu*to.x;
+      const y = (1-eu)*(1-eu)*from.y + 2*(1-eu)*eu*my + eu*eu*to.y;
+      const rg = vCtx.createRadialGradient(x, y, 0, x, y, 10);
+      rg.addColorStop(0, verm); rg.addColorStop(1, "rgba(0,0,0,0)");
+      vCtx.fillStyle = rg; vCtx.beginPath(); vCtx.arc(x, y, 10, 0, Math.PI*2); vCtx.fill();
+    }
+    if (dt >= 460 && dt <= 1020){
+      const p = (dt - 460) / 560;
+      vCtx.globalAlpha = 0.72 * (1 - p); vCtx.strokeStyle = verm; vCtx.lineWidth = 1.5;
+      vCtx.beginPath(); vCtx.arc(to.x, to.y, 6 + 22*p, 0, Math.PI*2); vCtx.stroke();
+      vCtx.globalAlpha = 1;
+    }
+    if (dt < 1060) requestAnimationFrame(frame);
+    else vCtx.clearRect(0, 0, W, H);
+  }
+  requestAnimationFrame(frame);
+  setStatus("指引已收起 · 随时点左上角「墨守」旁圆点回顾");
+}
+
+/* ---------- 业务动作 ---------- */
+function disarm(){
+  state.armed = false;
+  if (!state.draftDirty){
+    document.getElementById("btnRestoreLbl").textContent = "归位";
+    document.getElementById("btnRestore").classList.remove("primary");
+  }
+}
+
+async function onPrimary(){
+  if (state.busy) return;
+  if (state.draftDirty){
+    const absorbs = state.draftStack.filter(o => o.isAbsorb).map(o => ({ src: o.srcName, folder: o.folderName }));
+    if (absorbs.length > 0 && !confirm(`本次布阵将把 ${absorbs.length} 个桌面项移入对应文件夹（不会删除文件，可在目标文件夹内找回），确认执行吗？`)) return;
+    const remainItems = state.items.filter((_, idx) => !state.absorbedSet.has(idx));
+    state.busy = true;
+    const res = await api("/api/apply_draft", { items: remainItems, absorbs });
+    state.busy = false;
+    if (!res.ok){ setStatus("应用布阵失败 · " + res.error); return; }
+    state.snap = res.snap; state.items = (res.snap.items||[]).map(x=>({...x})); state.cal = res.calendar;
+    state.draftStack = []; state.absorbedSet = new Set(); updateDraftUi();
+    document.getElementById("tCount").textContent = state.items.length + " 项";
+    layoutBoard(); renderCalendar(); animSave();
+    setStatus(res.absorbed > 0 ? `已收纳 ${res.absorbed} 项入文件夹并应用布阵` : "已应用棋盘布阵 · 原桌面已自动留底");
+    return;
+  }
+  disarm(); state.busy = true;
+  const res = await api("/api/save", {});
+  state.busy = false;
+  if (!res.ok){ setStatus("落笔失败 · " + res.error); return; }
+  state.snap = res.snap; state.items = (res.snap.items||[]).map(x=>({...x})); state.cal = res.calendar;
+  document.getElementById("tCount").textContent = state.items.length + " 项";
+  layoutBoard(); renderCalendar(); animSave();
+  setStatus(`已落笔 · ${state.items.length} 项 · ${res.snap.screenW}×${res.snap.screenH}`);
+}
+
+async function onSecondary(){
+  if (state.busy) return;
+  if (state.draftDirty){ undoLastStep(); return; }
+  if (!state.armed){
+    state.busy = true;
+    const res = await api("/api/diff", {});
+    state.busy = false;
+    if (!res.ok){ setStatus(res.error); return; }
+    if (res.moveCount === 0){ setStatus("已与记忆一致，无需改动"); animRestore(); return; }
+    state.armed = true;
+    document.getElementById("btnRestoreLbl").textContent = `确认归位 (${res.moveCount})`;
+    document.getElementById("btnRestore").classList.add("primary");
+    setStatus(`需移动 ${res.moveCount} 项 · 再点确认（Esc 取消）`);
+    return;
+  }
+  state.busy = true;
+  const res = await api("/api/restore", {});
+  state.busy = false;
+  disarm();
+  if (!res.ok){ setStatus("归位失败 · " + res.error); return; }
+  animRestore();
+  setStatus(`已归位 · 共校正 ${res.moved} 项`);
+}
+
+function closeAllDrawers(restoreCurrent){
+  document.querySelectorAll(".drawer").forEach(d => d.classList.remove("open"));
+  if (restoreCurrent && state.previewSnap && state.snap){
+    state.previewFile = null; state.previewSnap = null;
+    state.items = (state.snap.items||[]).map(x=>({...x}));
+    layoutBoard(); setStatus("只动坐标 · 不动文件");
+  }
+}
+
+async function openHistory(){
+  closeAllDrawers(false); disarm();
+  const res = await api("/api/history");
+  state.histItems = res.items || [];
+  const box = document.getElementById("histList");
+  box.innerHTML = "";
+  if (!state.histItems.length){
+    box.innerHTML = `<div style="padding:12px 4px;color:var(--fg3)">暂无历史快照（每次「落子成记」自动留底）</div>`;
+  } else {
+    state.histItems.forEach(h => {
+      const row = document.createElement("div");
+      row.className = "hist-row" + (state.previewFile === h.file ? " sel" : "");
+      const ts = (h.savedAt || h.file).slice(5, 16).replace("-", ".");
+      row.textContent = `${state.previewFile === h.file ? "● " : "· "}${ts}  ·  ${h.count} 项  ·  ${h.note}`;
+      row.onclick = () => {
+        state.previewFile = h.file; state.previewSnap = h.snap;
+        state.items = (h.snap.items||[]).map(x=>({...x}));
+        layoutBoard(); setStatus(`预览历史 · ${ts} · ${h.count} 项（未改动桌面）`);
+        box.querySelectorAll(".hist-row").forEach(r => r.classList.remove("sel"));
+        row.classList.add("sel");
+      };
+      box.appendChild(row);
+    });
+  }
+  document.getElementById("histDrawer").classList.add("open");
+}
+
+async function applyRollback(){
+  if (!state.previewFile){ setStatus("请先在列表中点选一份历史快照"); return; }
+  const res = await api("/api/rollback", { file: state.previewFile });
+  if (!res.ok){ setStatus("回溯失败 · " + res.error); return; }
+  state.snap = res.snap; state.items = (res.snap.items||[]).map(x=>({...x})); state.cal = res.calendar;
+  state.previewFile = null; state.previewSnap = null;
+  closeAllDrawers(false); layoutBoard(); renderCalendar(); animSave();
+  setStatus("已设为此刻记忆 · 点「归位」可应用到桌面");
+}
+
+function openDirDrawer(){
+  closeAllDrawers(true);
+  document.getElementById("dirRootTxt").textContent = state.root;
+  document.getElementById("dirExeTxt").textContent = state.exeDir;
+  document.getElementById("dirDrawer").classList.add("open");
+}
+async function openDir(which){ await api("/api/open_dir", { which }); }
+async function chooseDir(){
+  const res = await api("/api/choose_dir", {});
+  if (!res.ok){ setStatus(res.error); return; }
+  state.root = res.root; document.getElementById("dirRootTxt").textContent = state.root;
+  setStatus("存址已记住 · " + state.root);
+}
+
+function openGuide(){ closeAllDrawers(true); document.getElementById("guideDrawer").classList.add("open"); }
+function closeGuide(markSeen, homing){
+  document.getElementById("guideDrawer").classList.remove("open");
+  if (markSeen && !state.seenGuide){ state.seenGuide = true; api("/api/config", { seenGuide: true }); }
+  if (homing) playGuideHomingHint();
+}
+function replayIntroFromGuide(){ closeGuide(true, false); setTimeout(() => playIntro(false), 180); }
+
+async function toggleTheme(){
+  state.dark = !state.dark;
+  document.documentElement.dataset.theme = state.dark ? "dark" : "light";
+  document.getElementById("lnkThemeTxt").textContent = state.dark ? "宣纸" : "夜墨";
+  api("/api/config", { dark: state.dark });
+  renderBoard(); renderCalendar();
+}
+
+/* ---------- 初始化 ---------- */
+async function init(){
+  buildLegend();
+  attachInkBtn(document.getElementById("btnSave"), onPrimary);
+  attachInkBtn(document.getElementById("btnRestore"), onSecondary);
+  document.getElementById("lnkHist").onclick = openHistory;
+  document.getElementById("calCanvas").onclick = openHistory;
+  document.getElementById("lnkDir").onclick = openDirDrawer;
+  document.getElementById("lnkTheme").onclick = toggleTheme;
+  document.getElementById("reviewDot").onclick = openGuide;
+  document.getElementById("btnClose").onclick = async () => { await api("/api/quit", {}); window.close(); };
+
+  window.addEventListener("keydown", e => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "s"){ e.preventDefault(); onPrimary(); }
+    else if (mod && e.key.toLowerCase() === "r"){ e.preventDefault(); onSecondary(); }
+    else if (mod && e.key.toLowerCase() === "z" && state.draftDirty){ e.preventDefault(); undoLastStep(); }
+    else if (e.key === "Escape"){
+      if (document.getElementById("guideDrawer").classList.contains("open")) closeGuide(true, true);
+      else if (document.querySelector(".drawer.open")) closeAllDrawers(true);
+      else if (state.draftDirty) cancelDraft();
+      else if (state.armed){ disarm(); setStatus("已取消操作 · 只动坐标 · 不动文件"); }
+    }
+  });
+  window.addEventListener("resize", () => { layoutBoard(); renderCalendar(); });
+
+  const res = await api("/api/state");
+  state.root = res.root; state.exeDir = res.exeDir;
+  state.dark = !!(res.config && res.config.dark);
+  state.seenGuide = !!(res.config && res.config.seenGuide);
+  document.documentElement.dataset.theme = state.dark ? "dark" : "light";
+  document.getElementById("lnkThemeTxt").textContent = state.dark ? "宣纸" : "夜墨";
+
+  state.snap = res.snap; state.items = (res.snap.items||[]).map(x=>({...x})); state.cal = res.calendar || Array(30).fill(0);
+  document.getElementById("tRes").textContent = `${res.snap.screenW} × ${res.snap.screenH}`;
+  document.getElementById("tCount").textContent = `${state.items.length} 项`;
+  if (res.firstRun) setStatus("首次运行 · 点「落子成记」记住当前桌面布局");
+
+  layoutBoard(); renderCalendar();
+  playIntro(true);
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>墨守</string>
+  <key>CFBundleDisplayName</key>
+  <string>墨守</string>
+  <key>CFBundleIdentifier</key>
+  <string>local.moshou.desktopkeeper</string>
+  <key>CFBundleVersion</key>
+  <string>2.5</string>
+  <key>CFBundleShortVersionString</key>
+  <string>2.5</string>
+  <key>CFBundleExecutable</key>
+  <string>moshou_launcher</string>
+  <key>CFBundleIconFile</key>
+  <string>MoShou.icns</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>墨守需要控制 Finder 以读取和恢复您的桌面图标坐标（绝不修改或删除文件）。</string>
+</dict>
+</plist>

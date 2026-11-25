@@ -1,0 +1,25 @@
+# 严格排除个人桌面快照、历史备份、旧原型脚本与本地日志（防止隐私泄露）
+*.json
+layouts/
+*.log
+*.ps1
+*.bat
+design/
+墨守/记忆/
+交接文档.md
+设计规划书.md
+桌面布局记忆卡.html
+
+# 排除本地编译产物与临时截图（由 GitHub Actions 自动构建发布）
+*.exe
+*.dmg
+*.zip
+墨守-跨平台发布/
+shot*/
+*.tmp
+.DS_Store
+__pycache__/
+*.pyc
+LayoutKeeper/bin/
+LayoutKeeper/obj/
+LayoutKeeper/*.exe
